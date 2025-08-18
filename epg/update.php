@@ -34,6 +34,9 @@ if (!(isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_RE
     exit('禁止直接访问，请修改update.php');
 }
 
+// 获取目标时区
+$target_time_zone = $Config['target_time_zone'] ?? 0;
+
 // 删除过期数据和日志
 function deleteOldData($db, $thresholdDate, &$log_messages) {
     global $Config;
@@ -88,12 +91,11 @@ function deleteOldData($db, $thresholdDate, &$log_messages) {
 
 // 根据时间字符串和时区偏移，计算目标时区及额外偏移后的格式化日期和时间
 function getFormatTime($time, $time_offset) {
-    global $Config;
+    global $Config, $target_time_zone;
 
     preg_match('/^(\d{14})\s*([+-]\d{4})$/', $time, $m);
     $base_time = $m[1];
     $source_offset = $m[2];
-    $target_offset = $Config['target_time_zone'] ?? '';
 
     // 用 UTC 时区解析基础时间，避免系统时区干扰
     $dt = DateTime::createFromFormat('YmdHis', $base_time, new DateTimeZone('UTC'));
@@ -101,10 +103,10 @@ function getFormatTime($time, $time_offset) {
 
     $time_offset_sec = empty($time_offset) ? 0 : offsetToSeconds($time_offset);
 
-    if ($target_offset === '' || $target_offset === '0') {
+    if (empty($target_time_zone)) {
         $total_offset = $time_offset_sec;
     } else {
-        $total_offset = offsetToSeconds($target_offset) - offsetToSeconds($source_offset) + $time_offset_sec;
+        $total_offset = offsetToSeconds($target_time_zone) - offsetToSeconds($source_offset) + $time_offset_sec;
     }
 
     $final_time = gmdate('Y-m-d H:i', $timestamp + $total_offset);
@@ -118,10 +120,11 @@ function offsetToSeconds($offset) {
     return $sign * ($hours * 3600 + $minutes * 60);
 }
 
-
 // 辅助函数：将日期和时间格式化为 XMLTV 格式
 function formatTime($date, $time) {
-    return date('YmdHis O', strtotime("$date $time"));
+    global $target_time_zone;
+    $tz = empty($target_time_zone) ? '+0800' : $target_time_zone; // 关闭时区转换时，设为 +0800
+    return date("YmdHis $tz", strtotime("$date $time"));
 }
 
 // 获取限定频道列表及映射关系
@@ -535,8 +538,8 @@ $channel_bind_epg = getChannelBindEPG();
 // 全局变量，用于记录已处理的记录
 $processedRecords = [];
 
-if (!empty($Config['target_time_zone'])) {
-    logMessage($log_messages, "【时区转换】 目标：" . $Config['target_time_zone']);
+if (!empty($target_time_zone)) {
+    logMessage($log_messages, "【时区转换】 目标：UTC" . substr_replace($target_time_zone, ':', -2, 0));
 } else {
     logMessage($log_messages, "【时区转换】 关闭");
 }
@@ -587,7 +590,7 @@ foreach ($Config['xml_urls'] as $xml_url) {
             logMessage($log_messages, "【修正】 时间偏移：$time_offset");
         }
     }
-        
+    
     downloadXmlData($cleaned_url, $userAgent, $db, $log_messages, $gen_list, $white_list, $black_list, $time_offset);
 }
 

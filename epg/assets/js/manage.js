@@ -848,7 +848,7 @@ function displayPage(data, page) {
         row.innerHTML = `
             <td>${start + index + 1}</td>
             ${columns.map((col, columnIndex) => {
-                let cellContent = item[col] || '';
+                let cellContent = (item[col] || '').replace(/&/g, "&amp;");
                 let cellClass = '';
                 
                 // 处理 disable 和 modified 列
